@@ -181,10 +181,9 @@ def parse_args():
     parser.add_argument('--dataset', choices=['AddSub', 'MultiArith', 'SingleEq', 'gsm8k', 'AQuA', 'SVAMP'],
                         required=True)
     parser.add_argument('--model', choices=['LLaMA-7B', 'BLOOM-7B', 'GPT-j-6B'], required=True)
-    parser.add_argument('--adapter', choices=['LoRA', 'AdapterP', 'AdapterH', 'Parallel', 'Prefix'],
-                        required=True)
+    parser.add_argument('--adapter', choices=['LoRA', 'AdapterP', 'AdapterH', 'Parallel', 'Prefix'])
     parser.add_argument('--base_model', required=True)
-    parser.add_argument('--lora_weights', required=True)
+    parser.add_argument('--lora_weights', type=str, default=None, help='lora weights path')
     parser.add_argument('--load_8bit', action='store_true', default=False)
 
     return parser.parse_args()
@@ -203,14 +202,13 @@ def load_model(args) -> tuple:
     if not base_model:
         raise ValueError(f'can not find base model name by the value: {args.model}')
     lora_weights = args.lora_weights
-    if not lora_weights:
-        raise ValueError(f'can not find lora weight, the value is: {lora_weights}')
 
     load_8bit = args.load_8bit
     if args.model == 'LLaMA-7B':
         tokenizer = LlamaTokenizer.from_pretrained(base_model)
     else:
         tokenizer = AutoTokenizer.from_pretrained(base_model)
+
     if device == "cuda":
         model = AutoModelForCausalLM.from_pretrained(
             base_model,
@@ -219,24 +217,27 @@ def load_model(args) -> tuple:
             device_map="auto",
             trust_remote_code=True,
         ) # fix zwq
-        model = PeftModel.from_pretrained(
-            model,
-            lora_weights,
-            torch_dtype=torch.float16,
-            device_map={"":0}
-        )
+        
+        if args.lora_weights is not None:
+            model = PeftModel.from_pretrained(
+                model,
+                lora_weights,
+                torch_dtype=torch.float16,
+                device_map={"":0}
+            )
     elif device == "mps":
         model = AutoModelForCausalLM.from_pretrained(
             base_model,
             device_map={"": device},
             torch_dtype=torch.float16,
         )
-        model = PeftModel.from_pretrained(
-            model,
-            lora_weights,
-            device_map={"": device},
-            torch_dtype=torch.float16,
-        )
+        if args.lora_weights is not None: 
+            model = PeftModel.from_pretrained(
+                model,
+                lora_weights,
+                device_map={"": device},
+                torch_dtype=torch.float16,
+            )
     else:
         model = AutoModelForCausalLM.from_pretrained(
             base_model, device_map={"": device}, low_cpu_mem_usage=True

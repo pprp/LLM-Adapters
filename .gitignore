@@ -1,3 +1,5 @@
 __pycache__
 .idea/*
 /peft/src/peft/__pycache__
+*.log 
+experiment/*
